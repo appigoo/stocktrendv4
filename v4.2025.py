@@ -53,7 +53,8 @@ def calculate_signal_success_rate(data):
         "📉 High<Low", "📉 MACD賣出", "📉 EMA賣出", "📉 價格趨勢賣出", "📉 價格趨勢賣出(量)", 
         "📉 價格趨勢賣出(量%)", "📉 普通跳空(下)", "📉 突破跳空(下)", "📉 持續跳空(下)", 
         "📉 衰竭跳空(下)", "📉 連續向下賣出", "📉 SMA50下降趨勢", "📉 SMA50_200下降趨勢", 
-        "📉 新卖出信号", "📉 RSI-MACD Overbought Crossover", "📉 EMA-SMA Downtrend Sell", "📉 Volume-MACD Sell"
+        "📉 新卖出信号", "📉 RSI-MACD Overbought Crossover", "📉 EMA-SMA Downtrend Sell", 
+        "📉 Volume-MACD Sell", "📉 EMA10_30賣出", "📉 EMA10_30_40強烈賣出", "📉 看跌吞沒", "📉 上吊線", "📉 黃昏之星"
     ]
     
     # 获取所有独特的信号类型
@@ -101,7 +102,11 @@ def send_email_alert(ticker, price_pct, volume_pct, low_high_signal=False, high_
                      continuous_up_buy_signal=False, continuous_down_sell_signal=False,
                      sma50_up_trend=False, sma50_down_trend=False,
                      sma50_200_up_trend=False, sma50_200_down_trend=False,
-                     new_buy_signal=False, new_sell_signal=False, new_pivot_signal=False):
+                     new_buy_signal=False, new_sell_signal=False, new_pivot_signal=False,
+                     ema10_30_buy_signal=False, ema10_30_40_strong_buy_signal=False,
+                     ema10_30_sell_signal=False, ema10_30_40_strong_sell_signal=False,
+                     bullish_engulfing=False, bearish_engulfing=False, hammer=False, hanging_man=False,
+                     morning_star=False, evening_star=False):
     subject = f"📣 股票異動通知：{ticker}"
     body = f"""
     股票代號：{ticker}
@@ -166,6 +171,26 @@ def send_email_alert(ticker, price_pct, volume_pct, low_high_signal=False, high_
         body += f"\n📉 新卖出信号：今日收盘价小于开盘价且今日开盘价小于前日收盘价！"
     if new_pivot_signal:
         body += f"\n🔄 新转折点：|Price Change %| > {PRICE_CHANGE_THRESHOLD}% 且 |Volume Change %| > {VOLUME_CHANGE_THRESHOLD}%！"
+    if ema10_30_buy_signal:
+        body += f"\n📈 EMA10_30 買入訊號：EMA10 上穿 EMA30！"
+    if ema10_30_40_strong_buy_signal:
+        body += f"\n📈 EMA10_30_40 強烈買入訊號：EMA10 上穿 EMA30 且高於 EMA40！"
+    if ema10_30_sell_signal:
+        body += f"\n📉 EMA10_30 賣出訊號：EMA10 下破 EMA30！"
+    if ema10_30_40_strong_sell_signal:
+        body += f"\n📉 EMA10_30_40 強烈賣出訊號：EMA10 下破 EMA30 且低於 EMA40！"
+    if bullish_engulfing:
+        body += f"\n📈 看漲吞沒形態：當前K線完全包圍前一根看跌K線，成交量放大！"
+    if bearish_engulfing:
+        body += f"\n📉 看跌吞沒形態：當前K線完全包圍前一根看漲K線，成交量放大！"
+    if hammer:
+        body += f"\n📈 錘頭線：下影線較長，買方介入，預示反轉！"
+    if hanging_man:
+        body += f"\n📉 上吊線：下影線較長，賣方介入，預示反轉！"
+    if morning_star:
+        body += f"\n📈 早晨之星：下跌後出現小實體K線，隨後強烈看漲K線，預示反轉！"
+    if evening_star:
+        body += f"\n📉 黃昏之星：上漲後出現小實體K線，隨後強烈看跌K線，預示反轉！"
     
     body += "\n系統偵測到異常變動，請立即查看市場情況。"
     msg = MIMEMultipart()
@@ -245,6 +270,10 @@ while True:
                 # 计算 EMA5 和 EMA10
                 data["EMA5"] = data["Close"].ewm(span=5, adjust=False).mean()
                 data["EMA10"] = data["Close"].ewm(span=10, adjust=False).mean()
+                
+                # 计算 EMA30 和 EMA40
+                data["EMA30"] = data["Close"].ewm(span=30, adjust=False).mean()
+                data["EMA40"] = data["Close"].ewm(span=40, adjust=False).mean()
                 
                 # 计算 RSI
                 data["RSI"] = calculate_rsi(data)
@@ -375,6 +404,78 @@ while True:
                         signals.append("📉 EMA-SMA Downtrend Sell")
                     if index > 0 and row["Volume"] > data["前5均量"].iloc[index] and row["MACD"] < 0 and data["MACD"].iloc[index-1] >= 0:
                         signals.append("📉 Volume-MACD Sell")
+                    # EMA10 > EMA30 買入訊號
+                    if (index > 0 and row["EMA10"] > row["EMA30"] and 
+                        data["EMA10"].iloc[index-1] <= data["EMA30"].iloc[index-1]):
+                        signals.append("📈 EMA10_30買入")
+                    # EMA10 > EMA30 且 EMA10 > EMA40 強烈買入訊號
+                    if (index > 0 and row["EMA10"] > row["EMA30"] and 
+                        data["EMA10"].iloc[index-1] <= data["EMA30"].iloc[index-1] and 
+                        row["EMA10"] > row["EMA40"]):
+                        signals.append("📈 EMA10_30_40強烈買入")
+                    # EMA10 < EMA30 賣出訊號
+                    if (index > 0 and row["EMA10"] < row["EMA30"] and 
+                        data["EMA10"].iloc[index-1] >= data["EMA30"].iloc[index-1]):
+                        signals.append("📉 EMA10_30賣出")
+                    # EMA10 < EMA30 且 EMA10 < EMA40 強烈賣出訊號
+                    if (index > 0 and row["EMA10"] < row["EMA30"] and 
+                        data["EMA10"].iloc[index-1] >= data["EMA30"].iloc[index-1] and 
+                        row["EMA10"] < row["EMA40"]):
+                        signals.append("📉 EMA10_30_40強烈賣出")
+                    # 看漲吞沒形態
+                    if (index > 0 and 
+                        data["Close"].iloc[index-1] < data["Open"].iloc[index-1] and 
+                        row["Close"] > row["Open"] and 
+                        row["Open"] < data["Close"].iloc[index-1] and 
+                        row["Close"] > data["Open"].iloc[index-1] and 
+                        row["Volume"] > data["前5均量"].iloc[index] and 
+                        row["RSI"] < 50):
+                        signals.append("📈 看漲吞沒")
+                    # 看跌吞沒形態
+                    if (index > 0 and 
+                        data["Close"].iloc[index-1] > data["Open"].iloc[index-1] and 
+                        row["Close"] < row["Open"] and 
+                        row["Open"] > data["Close"].iloc[index-1] and 
+                        row["Close"] < data["Open"].iloc[index-1] and 
+                        row["Volume"] > data["前5均量"].iloc[index] and 
+                        row["RSI"] > 50):
+                        signals.append("📉 看跌吞沒")
+                    # 錘頭線
+                    if (index > 0 and 
+                        row["Close"] > data["Close"].iloc[index-1] and  # 下跌趨勢後
+                        abs(row["Close"] - row["Open"]) < (row["High"] - row["Low"]) * 0.3 and 
+                        (min(row["Open"], row["Close"]) - row["Low"]) >= 2 * abs(row["Close"] - row["Open"]) and 
+                        (row["High"] - max(row["Open"], row["Close"])) < (min(row["Open"], row["Close"]) - row["Low"]) and 
+                        row["Volume"] > data["前5均量"].iloc[index] and 
+                        row["RSI"] < 50):
+                        signals.append("📈 錘頭線")
+                    # 上吊線
+                    if (index > 0 and 
+                        row["Close"] < data["Close"].iloc[index-1] and  # 上漲趨勢後
+                        abs(row["Close"] - row["Open"]) < (row["High"] - row["Low"]) * 0.3 and 
+                        (min(row["Open"], row["Close"]) - row["Low"]) >= 2 * abs(row["Close"] - row["Open"]) and 
+                        (row["High"] - max(row["Open"], row["Close"])) < (min(row["Open"], row["Close"]) - row["Low"]) and 
+                        row["Volume"] > data["前5均量"].iloc[index] and 
+                        row["RSI"] > 50):
+                        signals.append("📉 上吊線")
+                    # 早晨之星
+                    if (index > 1 and 
+                        data["Close"].iloc[index-2] < data["Open"].iloc[index-2] and  # 第一根看跌
+                        abs(data["Close"].iloc[index-1] - data["Open"].iloc[index-1]) < 0.3 * abs(data["Close"].iloc[index-2] - data["Open"].iloc[index-2]) and  # 第二根小實體
+                        row["Close"] > row["Open"] and  # 第三根看漲
+                        row["Close"] > (data["Open"].iloc[index-2] + data["Close"].iloc[index-2]) / 2 and  # 第三根收盤價高於第一根中點
+                        row["Volume"] > data["前5均量"].iloc[index] and 
+                        row["RSI"] < 50):
+                        signals.append("📈 早晨之星")
+                    # 黃昏之星
+                    if (index > 1 and 
+                        data["Close"].iloc[index-2] > data["Open"].iloc[index-2] and  # 第一根看漲
+                        abs(data["Close"].iloc[index-1] - data["Open"].iloc[index-1]) < 0.3 * abs(data["Close"].iloc[index-2] - data["Open"].iloc[index-2]) and  # 第二根小實體
+                        row["Close"] < row["Open"] and  # 第三根看跌
+                        row["Close"] < (data["Open"].iloc[index-2] + data["Close"].iloc[index-2]) / 2 and  # 第三根收盤價低於第一根中點
+                        row["Volume"] > data["前5均量"].iloc[index] and 
+                        row["RSI"] > 50):
+                        signals.append("📉 黃昏之星")
                     return ", ".join(signals) if signals else ""
                 
                 data["異動標記"] = [mark_signal(row, i) for i, row in data.iterrows()]
@@ -440,6 +541,62 @@ while True:
                 new_pivot_signal = (len(data) > 1 and 
                                    abs(data["Price Change %"].iloc[-1]) > PRICE_CHANGE_THRESHOLD and 
                                    abs(data["Volume Change %"].iloc[-1] ) > VOLUME_CHANGE_THRESHOLD)
+                ema10_30_buy_signal = (len(data) > 1 and 
+                                       data["EMA10"].iloc[-1] > data["EMA30"].iloc[-1] and 
+                                       data["EMA10"].iloc[-2] <= data["EMA30"].iloc[-2])
+                ema10_30_40_strong_buy_signal = (len(data) > 1 and 
+                                                 data["EMA10"].iloc[-1] > data["EMA30"].iloc[-1] and 
+                                                 data["EMA10"].iloc[-2] <= data["EMA30"].iloc[-2] and 
+                                                 data["EMA10"].iloc[-1] > data["EMA40"].iloc[-1])
+                ema10_30_sell_signal = (len(data) > 1 and 
+                                        data["EMA10"].iloc[-1] < data["EMA30"].iloc[-1] and 
+                                        data["EMA10"].iloc[-2] >= data["EMA30"].iloc[-2])
+                ema10_30_40_strong_sell_signal = (len(data) > 1 and 
+                                                  data["EMA10"].iloc[-1] < data["EMA30"].iloc[-1] and 
+                                                  data["EMA10"].iloc[-2] >= data["EMA30"].iloc[-2] and 
+                                                  data["EMA10"].iloc[-1] < data["EMA40"].iloc[-1])
+                bullish_engulfing = (len(data) > 1 and 
+                                     data["Close"].iloc[-2] < data["Open"].iloc[-2] and 
+                                     data["Close"].iloc[-1] > data["Open"].iloc[-1] and 
+                                     data["Open"].iloc[-1] < data["Close"].iloc[-2] and 
+                                     data["Close"].iloc[-1] > data["Open"].iloc[-2] and 
+                                     data["Volume"].iloc[-1] > data["前5均量"].iloc[-1] and 
+                                     data["RSI"].iloc[-1] < 50)
+                bearish_engulfing = (len(data) > 1 and 
+                                     data["Close"].iloc[-2] > data["Open"].iloc[-2] and 
+                                     data["Close"].iloc[-1] < data["Open"].iloc[-1] and 
+                                     data["Open"].iloc[-1] > data["Close"].iloc[-2] and 
+                                     data["Close"].iloc[-1] < data["Open"].iloc[-2] and 
+                                     data["Volume"].iloc[-1] > data["前5均量"].iloc[-1] and 
+                                     data["RSI"].iloc[-1] > 50)
+                hammer = (len(data) > 1 and 
+                          data["Close"].iloc[-1] > data["Close"].iloc[-2] and 
+                          abs(data["Close"].iloc[-1] - data["Open"].iloc[-1]) < (data["High"].iloc[-1] - data["Low"].iloc[-1]) * 0.3 and 
+                          (min(data["Open"].iloc[-1], data["Close"].iloc[-1]) - data["Low"].iloc[-1]) >= 2 * abs(data["Close"].iloc[-1] - data["Open"].iloc[-1]) and 
+                          (data["High"].iloc[-1] - max(data["Open"].iloc[-1], data["Close"].iloc[-1])) < (min(data["Open"].iloc[-1], data["Close"].iloc[-1]) - data["Low"].iloc[-1]) and 
+                          data["Volume"].iloc[-1] > data["前5均量"].iloc[-1] and 
+                          data["RSI"].iloc[-1] < 50)
+                hanging_man = (len(data) > 1 and 
+                               data["Close"].iloc[-1] < data["Close"].iloc[-2] and 
+                               abs(data["Close"].iloc[-1] - data["Open"].iloc[-1]) < (data["High"].iloc[-1] - data["Low"].iloc[-1]) * 0.3 and 
+                               (min(data["Open"].iloc[-1], data["Close"].iloc[-1]) - data["Low"].iloc[-1]) >= 2 * abs(data["Close"].iloc[-1] - data["Open"].iloc[-1]) and 
+                               (data["High"].iloc[-1] - max(data["Open"].iloc[-1], data["Close"].iloc[-1])) < (min(data["Open"].iloc[-1], data["Close"].iloc[-1]) - data["Low"].iloc[-1]) and 
+                               data["Volume"].iloc[-1] > data["前5均量"].iloc[-1] and 
+                               data["RSI"].iloc[-1] > 50)
+                morning_star = (len(data) > 2 and 
+                                data["Close"].iloc[-3] < data["Open"].iloc[-3] and 
+                                abs(data["Close"].iloc[-2] - data["Open"].iloc[-2]) < 0.3 * abs(data["Close"].iloc[-3] - data["Open"].iloc[-3]) and 
+                                data["Close"].iloc[-1] > data["Open"].iloc[-1] and 
+                                data["Close"].iloc[-1] > (data["Open"].iloc[-3] + data["Close"].iloc[-3]) / 2 and 
+                                data["Volume"].iloc[-1] > data["前5均量"].iloc[-1] and 
+                                data["RSI"].iloc[-1] < 50)
+                evening_star = (len(data) > 2 and 
+                                data["Close"].iloc[-3] > data["Open"].iloc[-3] and 
+                                abs(data["Close"].iloc[-2] - data["Open"].iloc[-2]) < 0.3 * abs(data["Close"].iloc[-3] - data["Open"].iloc[-3]) and 
+                                data["Close"].iloc[-1] < data["Open"].iloc[-1] and 
+                                data["Close"].iloc[-1] < (data["Open"].iloc[-3] + data["Close"].iloc[-3]) / 2 and 
+                                data["Volume"].iloc[-1] > data["前5均量"].iloc[-1] and 
+                                data["RSI"].iloc[-1] > 50)
                 
                 # 跳空信号检测
                 gap_common_up = False
@@ -545,7 +702,7 @@ while True:
                     )
 
                 # 异动提醒 + Email 推播
-                if (abs(price_pct_change) >= PRICE_THRESHOLD and abs(volume_pct_change) >= VOLUME_THRESHOLD) or low_high_signal or high_low_signal or macd_buy_signal or macd_sell_signal or ema_buy_signal or ema_sell_signal or price_trend_buy_signal or price_trend_sell_signal or price_trend_vol_buy_signal or price_trend_vol_sell_signal or price_trend_vol_pct_buy_signal or price_trend_vol_pct_sell_signal or gap_common_up or gap_common_down or gap_breakaway_up or gap_breakaway_down or gap_runaway_up or gap_runaway_down or gap_exhaustion_up or gap_exhaustion_down or continuous_up_buy_signal or continuous_down_sell_signal or sma50_up_trend or sma50_down_trend or sma50_200_up_trend or sma50_200_down_trend or new_buy_signal or new_sell_signal or new_pivot_signal:
+                if (abs(price_pct_change) >= PRICE_THRESHOLD and abs(volume_pct_change) >= VOLUME_THRESHOLD) or low_high_signal or high_low_signal or macd_buy_signal or macd_sell_signal or ema_buy_signal or ema_sell_signal or price_trend_buy_signal or price_trend_sell_signal or price_trend_vol_buy_signal or price_trend_vol_sell_signal or price_trend_vol_pct_buy_signal or price_trend_vol_pct_sell_signal or gap_common_up or gap_common_down or gap_breakaway_up or gap_breakaway_down or gap_runaway_up or gap_runaway_down or gap_exhaustion_up or gap_exhaustion_down or continuous_up_buy_signal or continuous_down_sell_signal or sma50_up_trend or sma50_down_trend or sma50_200_up_trend or sma50_200_down_trend or new_buy_signal or new_sell_signal or new_pivot_signal or ema10_30_buy_signal or ema10_30_40_strong_buy_signal or ema10_30_sell_signal or ema10_30_40_strong_sell_signal or bullish_engulfing or bearish_engulfing or hammer or hanging_man or morning_star or evening_star:
                     alert_msg = f"{ticker} 異動：價格 {price_pct_change:.2f}%、成交量 {volume_pct_change:.2f}%"
                     if low_high_signal:
                         alert_msg += "，當前最低價高於前一時段最高價"
@@ -605,6 +762,26 @@ while True:
                         alert_msg += "，新卖出信号（今日收盘价小于开盘价且今日开盘价小于前日收盘价）"
                     if new_pivot_signal:
                         alert_msg += f"，新转折点（|Price Change %| > {PRICE_CHANGE_THRESHOLD}% 且 |Volume Change %| > {VOLUME_CHANGE_THRESHOLD}%）"
+                    if ema10_30_buy_signal:
+                        alert_msg += "，EMA10_30 買入訊號（EMA10 上穿 EMA30）"
+                    if ema10_30_40_strong_buy_signal:
+                        alert_msg += "，EMA10_30_40 強烈買入訊號（EMA10 上穿 EMA30 且高於 EMA40）"
+                    if ema10_30_sell_signal:
+                        alert_msg += "，EMA10_30 賣出訊號（EMA10 下破 EMA30）"
+                    if ema10_30_40_strong_sell_signal:
+                        alert_msg += "，EMA10_30_40 強烈賣出訊號（EMA10 下破 EMA30 且低於 EMA40）"
+                    if bullish_engulfing:
+                        alert_msg += "，看漲吞沒形態（當前K線完全包圍前一根看跌K線，成交量放大）"
+                    if bearish_engulfing:
+                        alert_msg += "，看跌吞沒形態（當前K線完全包圍前一根看漲K線，成交量放大）"
+                    if hammer:
+                        alert_msg += "，錘頭線（下影線較長，買方介入，預示反轉）"
+                    if hanging_man:
+                        alert_msg += "，上吊線（下影線較長，賣方介入，預示反轉）"
+                    if morning_star:
+                        alert_msg += "，早晨之星（下跌後出現小實體K線，隨後強烈看漲K線，預示反轉）"
+                    if evening_star:
+                        alert_msg += "，黃昏之星（上漲後出現小實體K線，隨後強烈看跌K線，預示反轉）"
                     st.warning(f"📣 {alert_msg}")
                     st.toast(f"📣 {alert_msg}")
                     send_email_alert(ticker, price_pct_change, volume_pct_change, low_high_signal, high_low_signal, 
@@ -617,7 +794,11 @@ while True:
                                     continuous_up_buy_signal, continuous_down_sell_signal,
                                     sma50_up_trend, sma50_down_trend,
                                     sma50_200_up_trend, sma50_200_down_trend,
-                                    new_buy_signal, new_sell_signal, new_pivot_signal)
+                                    new_buy_signal, new_sell_signal, new_pivot_signal,
+                                    ema10_30_buy_signal, ema10_30_40_strong_buy_signal,
+                                    ema10_30_sell_signal, ema10_30_40_strong_sell_signal,
+                                    bullish_engulfing, bearish_engulfing, hammer, hanging_man,
+                                    morning_star, evening_star)
 
                 # 添加 K 线图（含 EMA）、成交量柱状图和 RSI 子图
                 st.subheader(f"📈 {ticker} K線圖與技術指標")
@@ -634,9 +815,11 @@ while True:
                                             close=data.tail(50)["Close"],
                                             name="K線"), row=1, col=1)
                 
-                # 添加 EMA5 和 EMA10
+                # 添加 EMA5、EMA10、EMA30 和 EMA40
                 fig.add_trace(px.line(data.tail(50), x="Datetime", y="EMA5")["data"][0], row=1, col=1)
                 fig.add_trace(px.line(data.tail(50), x="Datetime", y="EMA10")["data"][0], row=1, col=1)
+                fig.add_trace(px.line(data.tail(50), x="Datetime", y="EMA30")["data"][0], row=1, col=1)
+                fig.add_trace(px.line(data.tail(50), x="Datetime", y="EMA40")["data"][0], row=1, col=1)
                 
                 # 添加成交量柱状图
                 fig.add_bar(x=data.tail(50)["Datetime"], y=data.tail(50)["Volume"], 
@@ -647,7 +830,7 @@ while True:
                 fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)  # 超买线
                 fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)  # 超卖线
                 
-                # 标记 EMA 买入/卖出信号、关键转折点、新买入信号、新卖出信号和新转折点
+                # 标记 EMA 买入/卖出信号、关键转折点、新买入信号、新卖出信号、新转折点及新EMA信号
                 for i in range(1, len(data.tail(50))):
                     idx = -50 + i  # 调整索引以匹配 tail(50)
                     if (data["EMA5"].iloc[idx] > data["EMA10"].iloc[idx] and 
@@ -678,6 +861,36 @@ while True:
                                        mode="markers+text", marker=dict(symbol="star", size=10, color="purple"),
                                        text=[f"🔄 新转折点 ${data['Close'].iloc[idx]:.2f}"],
                                        textposition="top center", name="新转折点", row=1, col=1)
+                    if "EMA10_30買入" in data["異動標記"].iloc[idx]:
+                        fig.add_annotation(x=data["Datetime"].iloc[idx], y=data["Close"].iloc[idx],
+                                         text="📈 EMA10_30買入", showarrow=True, arrowhead=2, ax=20, ay=-30, row=1, col=1)
+                    if "EMA10_30_40強烈買入" in data["異動標記"].iloc[idx]:
+                        fig.add_annotation(x=data["Datetime"].iloc[idx], y=data["Close"].iloc[idx],
+                                         text="📈 EMA10_30_40強烈買入", showarrow=True, arrowhead=2, ax=20, ay=-50, row=1, col=1)
+                    if "EMA10_30賣出" in data["異動標記"].iloc[idx]:
+                        fig.add_annotation(x=data["Datetime"].iloc[idx], y=data["Close"].iloc[idx],
+                                         text="📉 EMA10_30賣出", showarrow=True, arrowhead=2, ax=20, ay=30, row=1, col=1)
+                    if "EMA10_30_40強烈賣出" in data["異動標記"].iloc[idx]:
+                        fig.add_annotation(x=data["Datetime"].iloc[idx], y=data["Close"].iloc[idx],
+                                         text="📉 EMA10_30_40強烈賣出", showarrow=True, arrowhead=2, ax=20, ay=50, row=1, col=1)
+                    if "看漲吞沒" in data["異動標記"].iloc[idx]:
+                        fig.add_annotation(x=data["Datetime"].iloc[idx], y=data["Close"].iloc[idx],
+                                         text="📈 看漲吞沒", showarrow=True, arrowhead=2, ax=20, ay=-30, row=1, col=1)
+                    if "看跌吞沒" in data["異動標記"].iloc[idx]:
+                        fig.add_annotation(x=data["Datetime"].iloc[idx], y=data["Close"].iloc[idx],
+                                         text="📉 看跌吞沒", showarrow=True, arrowhead=2, ax=20, ay=30, row=1, col=1)
+                    if "錘頭線" in data["異動標記"].iloc[idx]:
+                        fig.add_annotation(x=data["Datetime"].iloc[idx], y=data["Close"].iloc[idx],
+                                         text="📈 錘頭線", showarrow=True, arrowhead=2, ax=20, ay=-30, row=1, col=1)
+                    if "上吊線" in data["異動標記"].iloc[idx]:
+                        fig.add_annotation(x=data["Datetime"].iloc[idx], y=data["Close"].iloc[idx],
+                                         text="📉 上吊線", showarrow=True, arrowhead=2, ax=20, ay=30, row=1, col=1)
+                    if "早晨之星" in data["異動標記"].iloc[idx]:
+                        fig.add_annotation(x=data["Datetime"].iloc[idx], y=data["Close"].iloc[idx],
+                                         text="📈 早晨之星", showarrow=True, arrowhead=2, ax=20, ay=-30, row=1, col=1)
+                    if "黃昏之星" in data["異動標記"].iloc[idx]:
+                        fig.add_annotation(x=data["Datetime"].iloc[idx], y=data["Close"].iloc[idx],
+                                         text="📉 黃昏之星", showarrow=True, arrowhead=2, ax=20, ay=30, row=1, col=1)
                 
                 fig.update_layout(yaxis_title="價格", yaxis2_title="成交量", yaxis3_title="RSI", showlegend=True)
                 st.plotly_chart(fig, use_container_width=True, key=f"chart_{ticker}_{timestamp}")
