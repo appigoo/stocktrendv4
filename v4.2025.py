@@ -106,7 +106,7 @@ def send_email_alert(ticker, price_pct, volume_pct, low_high_signal=False, high_
                      ema10_30_buy_signal=False, ema10_30_40_strong_buy_signal=False,
                      ema10_30_sell_signal=False, ema10_30_40_strong_sell_signal=False,
                      bullish_engulfing=False, bearish_engulfing=False, hammer=False, hanging_man=False,
-                     morning_star=False, evening_star=False):
+                     morning_star=False, evening_star=False, close_to_high_buy_signal=False):
     subject = f"📣 股票異動通知：{ticker}"
     body = f"""
     股票代號：{ticker}
@@ -191,6 +191,8 @@ def send_email_alert(ticker, price_pct, volume_pct, low_high_signal=False, high_
         body += f"\n📈 早晨之星：下跌後出現小實體K線，隨後強烈看漲K線，預示反轉！"
     if evening_star:
         body += f"\n📉 黃昏之星：上漲後出現小實體K線，隨後強烈看跌K線，預示反轉！"
+    if close_to_high_buy_signal:
+        body += f"\n📈 Close_to_High 買入訊號：收市價接近最高價 (> {CLOSE_TO_HIGH_THRESHOLD}) 且成交量高！"
     
     body += "\n系統偵測到異常變動，請立即查看市場情況。"
     msg = MIMEMultipart()
@@ -226,6 +228,7 @@ VOLUME_CHANGE_THRESHOLD = st.number_input("新转折点 Volume Change % 阈值 (
 GAP_THRESHOLD = st.number_input("跳空幅度閾值 (%)", min_value=0.1, max_value=50.0, value=1.0, step=0.1)
 CONTINUOUS_UP_THRESHOLD = st.number_input("連續上漲閾值 (根K線)", min_value=1, max_value=20, value=3, step=1)
 CONTINUOUS_DOWN_THRESHOLD = st.number_input("連續下跌閾值 (根K線)", min_value=1, max_value=20, value=3, step=1)
+CLOSE_TO_HIGH_THRESHOLD = st.number_input("Close_to_High 買入閾值", min_value=0.5, max_value=1.0, value=0.98, step=0.01)
 PERCENTILE_THRESHOLD = st.selectbox("選擇 Price Change %、Volume Change %、Volume、股價漲跌幅 (%)、成交量變動幅 (%) 數據範圍 (%)", percentile_options, index=1)
 REFRESH_INTERVAL = st.selectbox("选择刷新间隔 (秒)", refresh_options, index=refresh_options.index(144))  # 默认144
 
@@ -263,6 +266,9 @@ while True:
                 data["前5均量"] = data["Volume"].rolling(window=5).mean()
                 data["📈 股價漲跌幅 (%)"] = ((abs(data["Price Change %"]) - data["前5均價ABS"]) / data["前5均價ABS"]).round(4) * 100
                 data["📊 成交量變動幅 (%)"] = ((data["Volume"] - data["前5均量"]) / data["前5均量"]).round(4) * 100
+
+                # 计算 Close_to_High
+                data["Close_to_High"] = data["Close"] / data["High"]
 
                 # 计算 MACD
                 data["MACD"], data["Signal"] = calculate_macd(data)
@@ -476,6 +482,9 @@ while True:
                         row["Volume"] > data["前5均量"].iloc[index] and 
                         row["RSI"] > 50):
                         signals.append("📉 黃昏之星")
+                    # Close_to_High 買入訊號
+                    if row["Close_to_High"] > CLOSE_TO_HIGH_THRESHOLD and row["Volume"] > data["前5均量"].iloc[index] and row["RSI"] < 70:
+                        signals.append("📈 Close_to_High 买入")
                     return ", ".join(signals) if signals else ""
                 
                 data["異動標記"] = [mark_signal(row, i) for i, row in data.iterrows()]
@@ -597,6 +606,7 @@ while True:
                                 data["Close"].iloc[-1] < (data["Open"].iloc[-3] + data["Close"].iloc[-3]) / 2 and 
                                 data["Volume"].iloc[-1] > data["前5均量"].iloc[-1] and 
                                 data["RSI"].iloc[-1] > 50)
+                close_to_high_buy_signal = len(data) > 0 and data["Close_to_High"].iloc[-1] > CLOSE_TO_HIGH_THRESHOLD and data["Volume"].iloc[-1] > data["前5均量"].iloc[-1]
                 
                 # 跳空信号检测
                 gap_common_up = False
@@ -702,7 +712,7 @@ while True:
                     )
 
                 # 异动提醒 + Email 推播
-                if (abs(price_pct_change) >= PRICE_THRESHOLD and abs(volume_pct_change) >= VOLUME_THRESHOLD) or low_high_signal or high_low_signal or macd_buy_signal or macd_sell_signal or ema_buy_signal or ema_sell_signal or price_trend_buy_signal or price_trend_sell_signal or price_trend_vol_buy_signal or price_trend_vol_sell_signal or price_trend_vol_pct_buy_signal or price_trend_vol_pct_sell_signal or gap_common_up or gap_common_down or gap_breakaway_up or gap_breakaway_down or gap_runaway_up or gap_runaway_down or gap_exhaustion_up or gap_exhaustion_down or continuous_up_buy_signal or continuous_down_sell_signal or sma50_up_trend or sma50_down_trend or sma50_200_up_trend or sma50_200_down_trend or new_buy_signal or new_sell_signal or new_pivot_signal or ema10_30_buy_signal or ema10_30_40_strong_buy_signal or ema10_30_sell_signal or ema10_30_40_strong_sell_signal or bullish_engulfing or bearish_engulfing or hammer or hanging_man or morning_star or evening_star:
+                if (abs(price_pct_change) >= PRICE_THRESHOLD and abs(volume_pct_change) >= VOLUME_THRESHOLD) or low_high_signal or high_low_signal or macd_buy_signal or macd_sell_signal or ema_buy_signal or ema_sell_signal or price_trend_buy_signal or price_trend_sell_signal or price_trend_vol_buy_signal or price_trend_vol_sell_signal or price_trend_vol_pct_buy_signal or price_trend_vol_pct_sell_signal or gap_common_up or gap_common_down or gap_breakaway_up or gap_breakaway_down or gap_runaway_up or gap_runaway_down or gap_exhaustion_up or gap_exhaustion_down or continuous_up_buy_signal or continuous_down_sell_signal or sma50_up_trend or sma50_down_trend or sma50_200_up_trend or sma50_200_down_trend or new_buy_signal or new_sell_signal or new_pivot_signal or ema10_30_buy_signal or ema10_30_40_strong_buy_signal or ema10_30_sell_signal or ema10_30_40_strong_sell_signal or bullish_engulfing or bearish_engulfing or hammer or hanging_man or morning_star or evening_star or close_to_high_buy_signal:
                     alert_msg = f"{ticker} 異動：價格 {price_pct_change:.2f}%、成交量 {volume_pct_change:.2f}%"
                     if low_high_signal:
                         alert_msg += "，當前最低價高於前一時段最高價"
@@ -782,6 +792,8 @@ while True:
                         alert_msg += "，早晨之星（下跌後出現小實體K線，隨後強烈看漲K線，預示反轉）"
                     if evening_star:
                         alert_msg += "，黃昏之星（上漲後出現小實體K線，隨後強烈看跌K線，預示反轉）"
+                    if close_to_high_buy_signal:
+                        alert_msg += f"，Close_to_High 買入訊號（收市價接近最高價 > {CLOSE_TO_HIGH_THRESHOLD} 且成交量高）"
                     st.warning(f"📣 {alert_msg}")
                     st.toast(f"📣 {alert_msg}")
                     send_email_alert(ticker, price_pct_change, volume_pct_change, low_high_signal, high_low_signal, 
@@ -798,7 +810,7 @@ while True:
                                     ema10_30_buy_signal, ema10_30_40_strong_buy_signal,
                                     ema10_30_sell_signal, ema10_30_40_strong_sell_signal,
                                     bullish_engulfing, bearish_engulfing, hammer, hanging_man,
-                                    morning_star, evening_star)
+                                    morning_star, evening_star, close_to_high_buy_signal)
 
                 # 添加 K 线图（含 EMA）、成交量柱状图和 RSI 子图
                 st.subheader(f"📈 {ticker} K線圖與技術指標")
