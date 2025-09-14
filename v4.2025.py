@@ -483,7 +483,9 @@ while True:
                         row["RSI"] > 50):
                         signals.append("📉 黃昏之星")
                     # Close_to_High 買入訊號
-                    if row["Close_to_High"] > CLOSE_TO_HIGH_THRESHOLD and row["Volume"] > data["前5均量"].iloc[index] and row["RSI"] < 70:
+                    #if row["Close_to_High"] > CLOSE_TO_HIGH_THRESHOLD and row["Volume"] > data["前5均量"].iloc[index] and row["RSI"] < 70:
+                        #signals.append("📈 Close_to_High 买入")
+                    if row["Close_to_High"] > CLOSE_TO_HIGH_THRESHOLD:
                         signals.append("📈 Close_to_High 买入")
                     return ", ".join(signals) if signals else ""
                 
