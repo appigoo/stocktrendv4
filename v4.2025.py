@@ -608,7 +608,8 @@ while True:
                                 data["Close"].iloc[-1] < (data["Open"].iloc[-3] + data["Close"].iloc[-3]) / 2 and 
                                 data["Volume"].iloc[-1] > data["前5均量"].iloc[-1] and 
                                 data["RSI"].iloc[-1] > 50)
-                close_to_high_buy_signal = len(data) > 0 and data["Close_to_High"].iloc[-1] > CLOSE_TO_HIGH_THRESHOLD and data["Volume"].iloc[-1] > data["前5均量"].iloc[-1]
+                #close_to_high_buy_signal = len(data) > 0 and data["Close_to_High"].iloc[-1] > CLOSE_TO_HIGH_THRESHOLD and data["Volume"].iloc[-1] > data["前5均量"].iloc[-1]
+                close_to_high_buy_signal = len(data) > 0 and data["Close_to_High"].iloc[-1] > CLOSE_TO_HIGH_THRESHOLD
                 
                 # 跳空信号检测
                 gap_common_up = False
