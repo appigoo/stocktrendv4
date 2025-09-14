@@ -228,7 +228,7 @@ VOLUME_CHANGE_THRESHOLD = st.number_input("新转折点 Volume Change % 阈值 (
 GAP_THRESHOLD = st.number_input("跳空幅度閾值 (%)", min_value=0.1, max_value=50.0, value=1.0, step=0.1)
 CONTINUOUS_UP_THRESHOLD = st.number_input("連續上漲閾值 (根K線)", min_value=1, max_value=20, value=3, step=1)
 CONTINUOUS_DOWN_THRESHOLD = st.number_input("連續下跌閾值 (根K線)", min_value=1, max_value=20, value=3, step=1)
-CLOSE_TO_HIGH_THRESHOLD = st.number_input("Close_to_High 買入閾值", min_value=0.500, max_value=1.000, value=0.988, step=0.001)
+CLOSE_TO_HIGH_THRESHOLD = st.number_input("Close_to_High 買入閾值", min_value=0.1, max_value=200.0, value=99.69, step=0.1)
 PERCENTILE_THRESHOLD = st.selectbox("選擇 Price Change %、Volume Change %、Volume、股價漲跌幅 (%)、成交量變動幅 (%) 數據範圍 (%)", percentile_options, index=1)
 REFRESH_INTERVAL = st.selectbox("选择刷新间隔 (秒)", refresh_options, index=refresh_options.index(144))  # 默认144
 
@@ -268,7 +268,7 @@ while True:
                 data["📊 成交量變動幅 (%)"] = ((data["Volume"] - data["前5均量"]) / data["前5均量"]).round(4) * 100
 
                 # 计算 Close_to_High
-                data["Close_to_High"] = data["Close"] / data["High"]
+                data["Close_to_High"] = data["Close"] / data["High"]*100
 
                 # 计算 MACD
                 data["MACD"], data["Signal"] = calculate_macd(data)
